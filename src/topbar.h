@@ -4,7 +4,7 @@
 #include "app.h"
 #include "workspace_layout.h"
 
-#define TOPBAR_TAB_COUNT 2
+#define TOPBAR_TAB_COUNT 3
 
 typedef struct {
     Rectangle tabs[TOPBAR_TAB_COUNT];

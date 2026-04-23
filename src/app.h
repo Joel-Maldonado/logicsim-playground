@@ -1,11 +1,13 @@
 #ifndef APP_H
 #define APP_H
 
+#include "bool_solver.h"
 #include "logic.h"
 
 typedef enum {
     MODE_BUILD,
-    MODE_COMPARE
+    MODE_COMPARE,
+    MODE_SOLVER
 } AppMode;
 
 typedef enum {
@@ -34,6 +36,7 @@ typedef enum {
     EDITOR_COMMAND_NONE,
     EDITOR_COMMAND_MODE_BUILD,
     EDITOR_COMMAND_MODE_COMPARE,
+    EDITOR_COMMAND_MODE_SOLVER,
     EDITOR_COMMAND_TOOL_SELECT,
     EDITOR_COMMAND_TOOL_INPUT,
     EDITOR_COMMAND_TOOL_OUTPUT,
@@ -153,6 +156,14 @@ typedef struct {
 } AppCommandQueue;
 
 typedef struct {
+    char input[BOOL_SOLVER_INPUT_MAX + 1U];
+    BoolSolverResult result;
+    float steps_scroll;
+    bool input_focused;
+    uint8_t _padding[3];
+} AppSolverState;
+
+typedef struct {
     LogicGraph graph;
     AppMode mode;
     AppTool active_tool;
@@ -164,6 +175,7 @@ typedef struct {
     AppSourceState source;
     AppInteractionState interaction;
     AppCommandQueue commands;
+    AppSolverState solver;
 } AppContext;
 
 #if defined(__clang__)
@@ -181,5 +193,9 @@ void app_select_row(AppContext *app, uint32_t row_index);
 void app_clear_graph(AppContext *app);
 void app_set_source_path(AppContext *app, const char *path);
 void app_set_source_status(AppContext *app, const char *status);
+void app_update_solver(AppContext *app);
+void app_solver_set_input(AppContext *app, const char *input);
+void app_solver_insert_char(AppContext *app, int codepoint);
+void app_solver_backspace(AppContext *app);
 
 #endif // APP_H

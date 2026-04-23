@@ -175,6 +175,45 @@ int ui_toolbox_slot_at(Rectangle panel, Vector2 mouse_pos) {
     return -1;
 }
 
+UiSolverLayout ui_measure_solver_workspace(Rectangle panel) {
+    UiSolverLayout layout;
+    float content_x;
+    float content_y;
+    float content_width;
+    float bottom;
+
+    memset(&layout, 0, sizeof(layout));
+    layout.panel_rect = panel;
+
+    content_x = panel.x + SOLVER_PANEL_PADDING;
+    content_y = panel.y + SOLVER_PANEL_PADDING + 34.0f;
+    content_width = panel.width - (SOLVER_PANEL_PADDING * 2.0f);
+    if (content_width < 0.0f) {
+        content_width = 0.0f;
+    }
+    bottom = panel.y + panel.height - SOLVER_PANEL_PADDING;
+
+    layout.input_rect = ui_make_rect(content_x, content_y, content_width, SOLVER_INPUT_HEIGHT);
+    content_y += SOLVER_INPUT_HEIGHT + SOLVER_SECTION_GAP;
+    layout.preview_rect = ui_make_rect(content_x, content_y, content_width, SOLVER_PREVIEW_HEIGHT);
+    content_y += SOLVER_PREVIEW_HEIGHT + SOLVER_SECTION_GAP;
+    layout.result_rect = ui_make_rect(content_x, content_y, content_width, SOLVER_RESULT_HEIGHT);
+    content_y += SOLVER_RESULT_HEIGHT + SOLVER_SECTION_GAP;
+    layout.steps_rect = ui_make_rect(content_x, content_y, content_width, bottom - content_y);
+    return layout;
+}
+
+float ui_solver_steps_content_height(const AppContext *app) {
+    uint8_t step_count;
+
+    step_count = 1U;
+    if (app && app->solver.result.ok && app->solver.result.step_count > 0U) {
+        step_count = app->solver.result.step_count;
+    }
+
+    return SOLVER_STEPS_HEADER_HEIGHT + ((float)step_count * SOLVER_STEP_HEIGHT) + 16.0f;
+}
+
 UiContextPanelLayout ui_measure_context_panel(const AppContext *app, Rectangle panel) {
     UiContextPanelLayout layout;
     float bottom;

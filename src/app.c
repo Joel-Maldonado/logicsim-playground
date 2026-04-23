@@ -3,11 +3,13 @@
 #include "app_canvas.h"
 #include "app_commands.h"
 #include "app_internal.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define APP_NAME_BUFFER_SIZE 32
+#define APP_SOLVER_SEED_EXPRESSION "!AB + !(A + B) + !AC + AB"
 
 static uint32_t app_count_nodes_of_type(const AppContext *app, NodeType type) {
     uint32_t count;
@@ -143,6 +145,7 @@ void app_init(AppContext *app) {
     app->comparison.status = APP_COMPARE_NO_TARGET;
     app_reset_canvas_view(app);
     app_set_source_status(app, "Canvas editing");
+    app_solver_set_input(app, APP_SOLVER_SEED_EXPRESSION);
 }
 
 void app_update_logic(AppContext *app) {
@@ -225,6 +228,12 @@ LogicNode *app_add_named_node(AppContext *app, NodeType type, const char *custom
 
 void app_set_mode(AppContext *app, AppMode mode) {
     app->mode = mode;
+    if (mode == MODE_SOLVER) {
+        app_cancel_interaction(app);
+        app->simulation.active = false;
+    } else {
+        app->solver.input_focused = false;
+    }
     app_compute_view_context(app);
     app_compare_if_needed(app);
 }
@@ -313,4 +322,63 @@ void app_set_source_status(AppContext *app, const char *status) {
     }
 
     snprintf(app->source.status, sizeof(app->source.status), "%s", status);
+}
+
+void app_update_solver(AppContext *app) {
+    if (!app) {
+        return;
+    }
+
+    bool_solver_solve(app->solver.input, &app->solver.result);
+}
+
+void app_solver_set_input(AppContext *app, const char *input) {
+    if (!app) {
+        return;
+    }
+
+    snprintf(app->solver.input, sizeof(app->solver.input), "%s", input ? input : "");
+    app->solver.steps_scroll = 0.0f;
+    app_update_solver(app);
+}
+
+void app_solver_insert_char(AppContext *app, int codepoint) {
+    size_t length;
+    char ch;
+
+    if (!app || codepoint < 32 || codepoint > 126) {
+        return;
+    }
+
+    length = strlen(app->solver.input);
+    if (length >= BOOL_SOLVER_INPUT_MAX) {
+        return;
+    }
+
+    ch = (char)codepoint;
+    if (ch >= 'a' && ch <= 'z') {
+        ch = (char)toupper((unsigned char)ch);
+    }
+
+    app->solver.input[length] = ch;
+    app->solver.input[length + 1U] = '\0';
+    app->solver.steps_scroll = 0.0f;
+    app_update_solver(app);
+}
+
+void app_solver_backspace(AppContext *app) {
+    size_t length;
+
+    if (!app) {
+        return;
+    }
+
+    length = strlen(app->solver.input);
+    if (length == 0U) {
+        return;
+    }
+
+    app->solver.input[length - 1U] = '\0';
+    app->solver.steps_scroll = 0.0f;
+    app_update_solver(app);
 }

@@ -8,9 +8,11 @@
 #include "../src/app_analysis.h"
 #include "../src/app_canvas.h"
 #include "../src/app_commands.h"
+#include "../src/bool_solver.h"
 #include "../src/circuit_file.h"
 #include "../src/draw_util.h"
 #include "../src/logic.h"
+#include "../src/topbar.h"
 #include "../src/ui.h"
 #include "../src/ui_geometry.h"
 #include "../src/workspace_layout.h"
@@ -129,6 +131,53 @@ static void test_expression(void) {
 
     free(expression);
     printf("test_expression passed!\n");
+}
+
+static void test_bool_solver_simplifies_sample_expression(void) {
+    BoolSolverResult result;
+
+    assert(bool_solver_solve("!AB + !(A + B) + !AC + AB", &result));
+    assert(strcmp(result.simplified_expression, "!A + B") == 0 || strcmp(result.simplified_expression, "B + !A") == 0);
+    assert(result.step_count >= 5U);
+    assert(strstr(result.steps[1].title, "De Morgan") != NULL);
+    assert(strcmp(result.variables, "A B C") == 0);
+    printf("test_bool_solver_simplifies_sample_expression passed!\n");
+}
+
+static void test_bool_solver_parser_precedence_and_implicit_and(void) {
+    BoolSolverResult result;
+
+    assert(bool_solver_solve("A + BC", &result));
+    assert(strcmp(result.simplified_expression, "A + BC") == 0);
+
+    assert(bool_solver_solve("!AB", &result));
+    assert(strcmp(result.simplified_expression, "!AB") == 0);
+    printf("test_bool_solver_parser_precedence_and_implicit_and passed!\n");
+}
+
+static void test_bool_solver_grouped_not_and_constants(void) {
+    BoolSolverResult result;
+
+    assert(bool_solver_solve("!(A+B)", &result));
+    assert(strcmp(result.simplified_expression, "!A!B") == 0);
+
+    assert(bool_solver_solve("A + 1", &result));
+    assert(strcmp(result.simplified_expression, "1") == 0);
+
+    assert(bool_solver_solve("A0", &result));
+    assert(strcmp(result.simplified_expression, "0") == 0);
+    printf("test_bool_solver_grouped_not_and_constants passed!\n");
+}
+
+static void test_bool_solver_reports_invalid_input(void) {
+    BoolSolverResult result;
+
+    assert(!bool_solver_solve("A +", &result));
+    assert(result.error[0] != '\0');
+
+    assert(!bool_solver_solve("ABCDEFGHI", &result));
+    assert(strstr(result.error, "at most") != NULL);
+    printf("test_bool_solver_reports_invalid_input passed!\n");
 }
 
 static void test_reconnect_replaces_existing_input(void) {
@@ -1826,12 +1875,51 @@ static void test_toolbox_items_scale_with_panel_width(void) {
     printf("test_toolbox_items_scale_with_panel_width passed!\n");
 }
 
+static void test_solver_mode_layout_and_input_state(void) {
+    AppContext app;
+    UiSolverLayout layout;
+    Rectangle panel;
+
+    assert(TOPBAR_TAB_COUNT == 3);
+
+    app_init(&app);
+    app_set_mode(&app, MODE_SOLVER);
+    assert(app.mode == MODE_SOLVER);
+    assert(!app.simulation.active);
+    assert(app.solver.result.ok);
+
+    app_solver_set_input(&app, "");
+    app_solver_insert_char(&app, 'a');
+    app_solver_insert_char(&app, '+');
+    app_solver_insert_char(&app, '1');
+    assert(strcmp(app.solver.input, "A+1") == 0);
+    assert(strcmp(app.solver.result.simplified_expression, "1") == 0);
+    app_solver_backspace(&app);
+    assert(strcmp(app.solver.input, "A+") == 0);
+    assert(!app.solver.result.ok);
+
+    panel = (Rectangle){ 0.0f, 50.0f, 900.0f, 826.0f };
+    layout = ui_measure_solver_workspace(panel);
+    assert(layout.input_rect.y > panel.y);
+    assert(layout.preview_rect.y > layout.input_rect.y);
+    assert(layout.result_rect.y > layout.preview_rect.y);
+    assert(layout.steps_rect.y > layout.result_rect.y);
+    assert(layout.steps_rect.y + layout.steps_rect.height <= panel.y + panel.height);
+    assert(ui_solver_steps_content_height(&app) > 0.0f);
+
+    printf("test_solver_mode_layout_and_input_state passed!\n");
+}
+
 int main(void) {
     test_gate_and();
     test_gate_or();
     test_simple_circuit();
     test_truth_table();
     test_expression();
+    test_bool_solver_simplifies_sample_expression();
+    test_bool_solver_parser_precedence_and_implicit_and();
+    test_bool_solver_grouped_not_and_constants();
+    test_bool_solver_reports_invalid_input();
     test_reconnect_replaces_existing_input();
     test_remove_node_removes_attached_nets();
     test_app_default_names();
@@ -1872,6 +1960,7 @@ int main(void) {
     test_workspace_layout_drag_updates_each_panel();
     test_workspace_layout_save_and_load_round_trip();
     test_toolbox_items_scale_with_panel_width();
+    test_solver_mode_layout_and_input_state();
     printf("All tests passed!\n");
     return 0;
 }

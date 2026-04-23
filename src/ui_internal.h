@@ -31,6 +31,13 @@ static const float TRUTH_TABLE_VALUE_X_PADDING = 20.0f;
 static const float WAVEFORM_HEADER_HEIGHT = 40.0f;
 static const float WAVEFORM_BOTTOM_PADDING = 12.0f;
 static const float WAVEFORM_ROW_HEIGHT = 40.0f;
+static const float SOLVER_PANEL_PADDING = 24.0f;
+static const float SOLVER_SECTION_GAP = 14.0f;
+static const float SOLVER_INPUT_HEIGHT = 76.0f;
+static const float SOLVER_PREVIEW_HEIGHT = 92.0f;
+static const float SOLVER_RESULT_HEIGHT = 98.0f;
+static const float SOLVER_STEP_HEIGHT = 88.0f;
+static const float SOLVER_STEPS_HEADER_HEIGHT = 48.0f;
 
 static inline Rectangle ui_make_rect(float x, float y, float width, float height) {
     if (width < 0.0f) {

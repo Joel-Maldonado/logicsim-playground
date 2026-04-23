@@ -71,6 +71,15 @@ static void draw_resize_handle(Rectangle rect, WorkspaceResizeHandle handle, boo
     DrawRectangleRounded(grip, 1.0f, 12, grip_color);
 }
 
+static Rectangle solver_workspace_rect(const WorkspaceFrame *frame) {
+    return (Rectangle){
+        0.0f,
+        frame->toolbox_rect.y,
+        frame->side_panel_rect.x,
+        frame->side_panel_rect.height
+    };
+}
+
 static void draw_footer(const AppContext *app, Rectangle footer_rect) {
     char footer_text[APP_SOURCE_PATH_MAX + 96];
     const char *file_label;
@@ -128,6 +137,7 @@ static void draw_shortcuts_overlay(const WorkspaceFrame *frame, Vector2 mouse_po
         "V          Select tool",
         "1-7        Pick a tool (input, gate, ...)",
         "B / C      Mode: Edit / Compare",
+        "Top tabs   Switch to Edit, Compare, or Solver",
         "Space      Run / Stop simulation",
         "Drag empty canvas  Pan canvas",
         ".          Step one tick",
@@ -146,7 +156,7 @@ static void draw_shortcuts_overlay(const WorkspaceFrame *frame, Vector2 mouse_po
     DrawRectangle(0, 0, frame->window_width, frame->window_height, (Color){ 0, 0, 0, 160 });
 
     card_w = 520.0f;
-    card_h = 350.0f;
+    card_h = 372.0f;
     card = (Rectangle){
         ((float)frame->window_width - card_w) * 0.5f,
         ((float)frame->window_height - card_h) * 0.5f,
@@ -230,45 +240,69 @@ int main(int argc, char **argv) {
 
         topbar_draw(&app, &topbar_layout, mouse_pos, editor_input_shortcuts_open(&input_state), frame_layout.window_width);
 
-        if (begin_scissor_rect(frame_layout.canvas_rect)) {
-            ui_draw_circuit(&app, frame_layout.canvas_rect);
-            ui_draw_placement_ghost(&app, frame_layout.canvas_rect, mouse_pos);
-            EndScissorMode();
-        }
-        ui_draw_toolbox(&app, frame_layout.toolbox_rect);
-        if (begin_scissor_rect(frame_layout.wave_rect)) {
-            ui_draw_waveforms(&app, frame_layout.wave_rect);
-            EndScissorMode();
-        }
+        if (app.mode == MODE_SOLVER) {
+            Rectangle solver_rect;
 
-        DrawRectangleRec(frame_layout.side_panel_rect, (Color){ 23, 23, 23, 255 });
-        if (begin_scissor_rect(frame_layout.side_panel_rect)) {
-            ui_draw_context_panel(&app, frame_layout.side_panel_rect);
-            EndScissorMode();
+            solver_rect = solver_workspace_rect(&frame_layout);
+            if (begin_scissor_rect(solver_rect)) {
+                ui_draw_solver_workspace(&app, solver_rect);
+                EndScissorMode();
+            }
+
+            DrawRectangleRec(frame_layout.side_panel_rect, (Color){ 23, 23, 23, 255 });
+            if (begin_scissor_rect(frame_layout.side_panel_rect)) {
+                ui_draw_solver_side_panel(&app, frame_layout.side_panel_rect);
+                EndScissorMode();
+            }
+
+            draw_resize_seam(resize_handles.side_panel, WORKSPACE_RESIZE_HANDLE_SIDE_PANEL);
+            draw_resize_handle(
+                resize_handles.side_panel,
+                WORKSPACE_RESIZE_HANDLE_SIDE_PANEL,
+                hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_SIDE_PANEL,
+                editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_SIDE_PANEL
+            );
+        } else {
+            if (begin_scissor_rect(frame_layout.canvas_rect)) {
+                ui_draw_circuit(&app, frame_layout.canvas_rect);
+                ui_draw_placement_ghost(&app, frame_layout.canvas_rect, mouse_pos);
+                EndScissorMode();
+            }
+            ui_draw_toolbox(&app, frame_layout.toolbox_rect);
+            if (begin_scissor_rect(frame_layout.wave_rect)) {
+                ui_draw_waveforms(&app, frame_layout.wave_rect);
+                EndScissorMode();
+            }
+
+            DrawRectangleRec(frame_layout.side_panel_rect, (Color){ 23, 23, 23, 255 });
+            if (begin_scissor_rect(frame_layout.side_panel_rect)) {
+                ui_draw_context_panel(&app, frame_layout.side_panel_rect);
+                EndScissorMode();
+            }
+
+            draw_resize_seam(resize_handles.toolbox, WORKSPACE_RESIZE_HANDLE_TOOLBOX);
+            draw_resize_seam(resize_handles.side_panel, WORKSPACE_RESIZE_HANDLE_SIDE_PANEL);
+            draw_resize_seam(resize_handles.wave_panel, WORKSPACE_RESIZE_HANDLE_WAVE_PANEL);
+
+            draw_resize_handle(
+                resize_handles.toolbox,
+                WORKSPACE_RESIZE_HANDLE_TOOLBOX,
+                hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_TOOLBOX,
+                editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_TOOLBOX
+            );
+            draw_resize_handle(
+                resize_handles.side_panel,
+                WORKSPACE_RESIZE_HANDLE_SIDE_PANEL,
+                hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_SIDE_PANEL,
+                editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_SIDE_PANEL
+            );
+            draw_resize_handle(
+                resize_handles.wave_panel,
+                WORKSPACE_RESIZE_HANDLE_WAVE_PANEL,
+                hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_WAVE_PANEL,
+                editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_WAVE_PANEL
+            );
         }
-
-        draw_resize_seam(resize_handles.toolbox, WORKSPACE_RESIZE_HANDLE_TOOLBOX);
-        draw_resize_seam(resize_handles.side_panel, WORKSPACE_RESIZE_HANDLE_SIDE_PANEL);
-        draw_resize_seam(resize_handles.wave_panel, WORKSPACE_RESIZE_HANDLE_WAVE_PANEL);
-
-        draw_resize_handle(
-            resize_handles.toolbox,
-            WORKSPACE_RESIZE_HANDLE_TOOLBOX,
-            hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_TOOLBOX,
-            editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_TOOLBOX
-        );
-        draw_resize_handle(
-            resize_handles.side_panel,
-            WORKSPACE_RESIZE_HANDLE_SIDE_PANEL,
-            hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_SIDE_PANEL,
-            editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_SIDE_PANEL
-        );
-        draw_resize_handle(
-            resize_handles.wave_panel,
-            WORKSPACE_RESIZE_HANDLE_WAVE_PANEL,
-            hovered_resize_handle == WORKSPACE_RESIZE_HANDLE_WAVE_PANEL,
-            editor_input_active_resize_handle(&input_state) == WORKSPACE_RESIZE_HANDLE_WAVE_PANEL
-        );
 
         draw_footer(&app, frame_layout.footer_rect);
         if (editor_input_shortcuts_open(&input_state)) {

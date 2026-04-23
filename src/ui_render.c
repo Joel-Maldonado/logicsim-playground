@@ -1179,6 +1179,335 @@ static void draw_context_compare(AppContext *app, Rectangle rect) {
     }
 }
 
+static const char *boolean_operand_end(const char *cursor) {
+    int depth;
+
+    if (!cursor || *cursor == '\0') {
+        return cursor;
+    }
+
+    if (*cursor == '!') {
+        return boolean_operand_end(cursor + 1);
+    }
+
+    if (*cursor != '(') {
+        return cursor + 1;
+    }
+
+    depth = 0;
+    while (*cursor != '\0') {
+        if (*cursor == '(') {
+            depth++;
+        } else if (*cursor == ')') {
+            depth--;
+            if (depth == 0) {
+                return cursor + 1;
+            }
+        }
+        cursor++;
+    }
+
+    return cursor;
+}
+
+static float boolean_expression_width_range(const char *start, const char *end, int font_size) {
+    const char *cursor;
+    float width;
+
+    cursor = start;
+    width = 0.0f;
+    while (cursor && *cursor != '\0' && cursor < end) {
+        if (*cursor == '!') {
+            const char *operand_start;
+            const char *operand_end;
+
+            operand_start = cursor + 1;
+            operand_end = boolean_operand_end(operand_start);
+            width += boolean_expression_width_range(operand_start, operand_end, font_size);
+            cursor = operand_end;
+        } else {
+            char text[2];
+
+            text[0] = *cursor;
+            text[1] = '\0';
+            width += text_width(text, font_size);
+            cursor++;
+        }
+    }
+
+    return width;
+}
+
+static float boolean_expression_width(const char *expression, int font_size) {
+    if (!expression) {
+        return 0.0f;
+    }
+
+    return boolean_expression_width_range(expression, expression + strlen(expression), font_size);
+}
+
+static float draw_boolean_expression_range(
+    const char *start,
+    const char *end,
+    float x,
+    float y,
+    int font_size,
+    Color color
+) {
+    const char *cursor;
+
+    cursor = start;
+    while (cursor && *cursor != '\0' && cursor < end) {
+        if (*cursor == '!') {
+            const char *operand_start;
+            const char *operand_end;
+            float overline_start;
+            float overline_end;
+            float overline_y;
+
+            operand_start = cursor + 1;
+            operand_end = boolean_operand_end(operand_start);
+            overline_start = x;
+            x = draw_boolean_expression_range(operand_start, operand_end, x, y, font_size, color);
+            overline_end = x;
+            overline_y = y - 4.0f;
+            DrawLineEx((Vector2){ overline_start, overline_y }, (Vector2){ overline_end, overline_y }, 2.0f, color);
+            cursor = operand_end;
+        } else {
+            char text[2];
+
+            text[0] = *cursor;
+            text[1] = '\0';
+            draw_text_at(text, x, y, font_size, color);
+            x += text_width(text, font_size);
+            cursor++;
+        }
+    }
+
+    return x;
+}
+
+static int fit_boolean_expression_font_size(const char *expression, float max_width, int preferred_size, int min_size) {
+    int font_size;
+
+    font_size = preferred_size;
+    while (font_size > min_size && boolean_expression_width(expression, font_size) > max_width) {
+        font_size--;
+    }
+
+    return font_size;
+}
+
+static float draw_boolean_expression(const char *expression, float x, float y, float max_width, int preferred_size, int min_size, Color color) {
+    int font_size;
+
+    if (!expression || expression[0] == '\0') {
+        return x;
+    }
+
+    font_size = fit_boolean_expression_font_size(expression, max_width, preferred_size, min_size);
+    return draw_boolean_expression_range(expression, expression + strlen(expression), x, y, font_size, color);
+}
+
+static void draw_solver_input(AppContext *app, Rectangle rect) {
+    Rectangle field;
+    Color border;
+    float text_x;
+    float text_y;
+    float max_width;
+
+    draw_text_at("EXPRESSION", rect.x, rect.y, 11, GRAY);
+    field = ui_make_rect(rect.x, rect.y + 20.0f, rect.width, 44.0f);
+    border = app->solver.input_focused ? (Color){ 200, 170, 255, 220 } : (Color){ 70, 70, 70, 255 };
+    DrawRectangleRounded(field, 0.12f, 8, (Color){ 31, 31, 31, 255 });
+    DrawRectangleRoundedLinesEx(field, 0.12f, 8, 1.0f, border);
+
+    text_x = field.x + 14.0f;
+    text_y = field.y + 13.0f;
+    max_width = field.width - 28.0f;
+    if (app->solver.input[0] == '\0') {
+        draw_text_at("!AB + !(A + B) + !AC + AB", text_x, text_y, 14, (Color){ 120, 120, 120, 255 });
+    } else {
+        char fitted[BOOL_SOLVER_INPUT_MAX + 1U];
+
+        text_fit_with_ellipsis(app->solver.input, 14, max_width, fitted, sizeof(fitted));
+        draw_text_at(fitted, text_x, text_y, 14, LIGHTGRAY);
+        if (app->solver.input_focused && ((int)(GetTime() * 2.0) % 2) == 0) {
+            float caret_x;
+
+            caret_x = text_x + text_width(fitted, 14) + 2.0f;
+            if (caret_x < field.x + field.width - 10.0f) {
+                DrawLineEx((Vector2){ caret_x, field.y + 10.0f }, (Vector2){ caret_x, field.y + field.height - 10.0f }, 1.0f, UI_SELECT_VIOLET);
+            }
+        }
+    }
+}
+
+static void draw_solver_preview(AppContext *app, Rectangle rect) {
+    draw_section_shell(rect);
+    draw_section_header(rect, "PREVIEW");
+    if (app->solver.input[0] == '\0') {
+        draw_text_at("Enter an expression.", rect.x + 16.0f, rect.y + 42.0f, 13, GRAY);
+        return;
+    }
+
+    draw_boolean_expression(app->solver.input, rect.x + 16.0f, rect.y + 44.0f, rect.width - 32.0f, 28, 14, LIGHTGRAY);
+}
+
+static void draw_solver_result(AppContext *app, Rectangle rect) {
+    draw_section_shell(rect);
+    draw_section_header(rect, "SIMPLIFIED");
+    if (!app->solver.result.ok) {
+        draw_wrapped_text_block(
+            app->solver.result.error[0] ? app->solver.result.error : "Could not simplify the expression.",
+            rect.x + 16.0f,
+            rect.y + 38.0f,
+            rect.width - 32.0f,
+            13,
+            4.0f,
+            3U,
+            (Color){ 220, 90, 90, 255 }
+        );
+        return;
+    }
+
+    draw_boolean_expression(
+        app->solver.result.simplified_expression,
+        rect.x + 16.0f,
+        rect.y + 42.0f,
+        rect.width - 32.0f,
+        32,
+        16,
+        UI_SELECT_VIOLET
+    );
+}
+
+static void draw_solver_steps(AppContext *app, Rectangle rect) {
+    float content_y;
+    float max_scroll;
+    uint8_t step_index;
+
+    draw_section_shell(rect);
+    draw_text_at("Steps", rect.x + 16.0f, rect.y + 14.0f, 24, WHITE);
+
+    max_scroll = ui_solver_steps_content_height(app) - rect.height;
+    if (max_scroll < 0.0f) {
+        max_scroll = 0.0f;
+    }
+    if (app->solver.steps_scroll > max_scroll) {
+        app->solver.steps_scroll = max_scroll;
+    }
+
+    if (!begin_scissor_rect(ui_make_rect(rect.x + 1.0f, rect.y + SOLVER_STEPS_HEADER_HEIGHT, rect.width - 2.0f, rect.height - SOLVER_STEPS_HEADER_HEIGHT - 1.0f))) {
+        return;
+    }
+
+    content_y = rect.y + SOLVER_STEPS_HEADER_HEIGHT - app->solver.steps_scroll;
+    if (!app->solver.result.ok) {
+        draw_line_at(rect.x + 14.0f, content_y, rect.x + rect.width - 14.0f, content_y, (Color){ 64, 64, 64, 255 });
+        draw_text_at("Waiting for a valid expression", rect.x + 16.0f, content_y + 18.0f, 15, GRAY);
+        EndScissorMode();
+        return;
+    }
+
+    for (step_index = 0U; step_index < app->solver.result.step_count; step_index++) {
+        const BoolSolverStep *step;
+        float step_top;
+
+        step = &app->solver.result.steps[step_index];
+        step_top = content_y + ((float)step_index * SOLVER_STEP_HEIGHT);
+        draw_line_at(rect.x + 14.0f, step_top, rect.x + rect.width - 14.0f, step_top, (Color){ 64, 64, 64, 255 });
+        draw_wrapped_text_block(
+            step->title,
+            rect.x + 16.0f,
+            step_top + 16.0f,
+            rect.width - 32.0f,
+            15,
+            3.0f,
+            2U,
+            (Color){ 150, 150, 150, 255 }
+        );
+        draw_boolean_expression(
+            step->expression,
+            rect.x + 16.0f,
+            step_top + 48.0f,
+            rect.width - 32.0f,
+            24,
+            12,
+            LIGHTGRAY
+        );
+    }
+
+    EndScissorMode();
+}
+
+void ui_draw_solver_workspace(AppContext *app, Rectangle panel) {
+    UiSolverLayout layout;
+
+    DrawRectangleRec(panel, (Color){ 24, 24, 24, 255 });
+    layout = ui_measure_solver_workspace(panel);
+
+    draw_text_at("BOOLEAN ALGEBRA SOLVER", layout.panel_rect.x + SOLVER_PANEL_PADDING, layout.panel_rect.y + 16.0f, 18, LIGHTGRAY);
+    draw_solver_input(app, layout.input_rect);
+    draw_solver_preview(app, layout.preview_rect);
+    draw_solver_result(app, layout.result_rect);
+    draw_solver_steps(app, layout.steps_rect);
+}
+
+static void draw_solver_side_section(Rectangle rect, const char *title, const char *body, Color body_color, uint32_t max_lines) {
+    draw_section_shell(rect);
+    draw_section_header(rect, title);
+    draw_wrapped_text_block(body, rect.x + 16.0f, rect.y + 32.0f, rect.width - 32.0f, 12, 4.0f, max_lines, body_color);
+}
+
+void ui_draw_solver_side_panel(AppContext *app, Rectangle panel) {
+    Rectangle section;
+    float x;
+    float y;
+    float width;
+    const char *status;
+    Color status_color;
+
+    x = panel.x + CONTEXT_PANEL_PADDING;
+    y = panel.y + CONTEXT_PANEL_PADDING;
+    width = panel.width - (CONTEXT_PANEL_PADDING * 2.0f);
+    if (width < 0.0f) {
+        width = 0.0f;
+    }
+
+    status = app->solver.result.ok ? "Verified equivalent by truth table." :
+        (app->solver.result.error[0] ? app->solver.result.error : "Expression has not been solved.");
+    status_color = app->solver.result.ok ? (Color){ 120, 210, 150, 255 } : (Color){ 220, 90, 90, 255 };
+
+    section = ui_make_rect(x, y, width, 78.0f);
+    draw_solver_side_section(section, "STATUS", status, status_color, 2U);
+    y += section.height + CONTEXT_PANEL_GAP;
+
+    section = ui_make_rect(x, y, width, 88.0f);
+    draw_solver_side_section(section, "VARIABLES", app->solver.result.variables[0] ? app->solver.result.variables : "None", LIGHTGRAY, 2U);
+    y += section.height + CONTEXT_PANEL_GAP;
+
+    section = ui_make_rect(x, y, width, 130.0f);
+    draw_solver_side_section(
+        section,
+        "NOTATION",
+        "!A means NOT A. Adjacent variables multiply, + is OR, and parentheses group expressions.",
+        LIGHTGRAY,
+        4U
+    );
+    y += section.height + CONTEXT_PANEL_GAP;
+
+    section = ui_make_rect(x, y, width, panel.y + panel.height - CONTEXT_PANEL_PADDING - y);
+    draw_solver_side_section(
+        section,
+        "ALGORITHM USED",
+        app->solver.result.algorithm[0] ? app->solver.result.algorithm :
+            "Parse the expression, normalize NOT, build minterms, combine implicants, cover essentials, and verify.",
+        LIGHTGRAY,
+        10U
+    );
+}
+
 void ui_draw_context_panel(AppContext *app, Rectangle panel) {
     UiContextPanelLayout layout;
 

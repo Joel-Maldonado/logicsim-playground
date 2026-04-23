@@ -423,6 +423,9 @@ void app_handle_command(AppContext *app, EditorCommand command) {
         case EDITOR_COMMAND_MODE_COMPARE:
             app_set_mode(app, MODE_COMPARE);
             break;
+        case EDITOR_COMMAND_MODE_SOLVER:
+            app_set_mode(app, MODE_SOLVER);
+            break;
         case EDITOR_COMMAND_TOOL_SELECT:
             app_set_tool(app, APP_TOOL_SELECT);
             break;
@@ -554,6 +557,9 @@ bool app_tool_places_node(AppTool tool) {
 }
 
 const char *app_mode_label(AppMode mode) {
+    if (mode == MODE_SOLVER) {
+        return "Solver";
+    }
     if (mode == MODE_COMPARE) {
         return "Compare";
     }

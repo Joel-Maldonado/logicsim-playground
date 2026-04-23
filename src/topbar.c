@@ -15,20 +15,40 @@
 #define TOPBAR_HELP_GAP 14.0f
 
 static bool topbar_sim_controls_visible(AppMode mode) {
-    (void)mode;
-    return true;
+    return mode != MODE_SOLVER;
 }
 
 static AppMode topbar_mode_for_tab(int index) {
-    return (index == 1) ? MODE_COMPARE : MODE_BUILD;
+    if (index == 1) {
+        return MODE_COMPARE;
+    }
+    if (index == 2) {
+        return MODE_SOLVER;
+    }
+
+    return MODE_BUILD;
 }
 
 static EditorCommand topbar_command_for_tab(int index) {
-    return (index == 1) ? EDITOR_COMMAND_MODE_COMPARE : EDITOR_COMMAND_MODE_BUILD;
+    if (index == 1) {
+        return EDITOR_COMMAND_MODE_COMPARE;
+    }
+    if (index == 2) {
+        return EDITOR_COMMAND_MODE_SOLVER;
+    }
+
+    return EDITOR_COMMAND_MODE_BUILD;
 }
 
 static const char *topbar_tab_label(int index) {
-    return (index == 1) ? "COMPARE" : "EDIT";
+    if (index == 1) {
+        return "COMPARE";
+    }
+    if (index == 2) {
+        return "SOLVER";
+    }
+
+    return "EDIT";
 }
 
 TopbarLayout topbar_compute_layout(const WorkspaceFrame *frame) {
