@@ -95,7 +95,7 @@ static void draw_footer(const AppContext *app, Rectangle footer_rect) {
     file_label = app->source.path[0] ? app->source.path : "untitled.circ";
     live_count = 0U;
     for (node_index = 0U; node_index < app->graph.node_count; node_index++) {
-        if (app->graph.nodes[node_index].type != (NodeType)-1) {
+        if (logic_node_is_active(&app->graph.nodes[node_index])) {
             live_count++;
         }
     }
@@ -104,8 +104,7 @@ static void draw_footer(const AppContext *app, Rectangle footer_rect) {
     snprintf(sim_segment, sizeof(sim_segment), "  |  sim @ %.0f Hz", (double)app->simulation.speed);
 
     selected_label[0] = '\0';
-    if (app->selection.selected_wire_sink && app->selection.selected_wire_sink->node &&
-        app->selection.selected_wire_sink->node->type != (NodeType)-1) {
+    if (app->selection.selected_wire_sink && logic_node_is_active(app->selection.selected_wire_sink->node)) {
         snprintf(
             selected_label,
             sizeof(selected_label),
@@ -113,7 +112,7 @@ static void draw_footer(const AppContext *app, Rectangle footer_rect) {
             app->selection.selected_wire_sink->node->name ? app->selection.selected_wire_sink->node->name : "node",
             app->selection.selected_wire_sink->index
         );
-    } else if (app->selection.selected_node && app->selection.selected_node->type != (NodeType)-1 &&
+    } else if (logic_node_is_active(app->selection.selected_node) &&
         app->selection.selected_node->name) {
         snprintf(selected_label, sizeof(selected_label), "%s", app->selection.selected_node->name);
     }
@@ -203,7 +202,7 @@ int main(int argc, char **argv) {
     topbar_layout = topbar_compute_layout(&frame_layout);
 
     app_init(&app);
-    app_update_logic(&app);
+    app_rebuild_derived_state(&app);
     editor_input_init(&input_state);
     source_watch_init(&source_watch);
 

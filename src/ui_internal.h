@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include "draw_util.h"
+#include "node_catalog.h"
 #include "ui_geometry.h"
 #include "ui.h"
 
@@ -64,36 +65,15 @@ static inline Color ui_logic_color(LogicValue value) {
 }
 
 static inline const char *ui_node_label(NodeType type) {
-    if (type == NODE_INPUT) {
-        return "IN";
-    }
-    if (type == NODE_OUTPUT) {
-        return "OUT";
-    }
-    if (type == NODE_GATE_DFF) {
-        return "DFF";
-    }
-    if (type == NODE_GATE_CLOCK) {
-        return "CLK";
-    }
-    if (type == NODE_GATE_NAND) {
-        return "NAND";
-    }
-    if (type == NODE_GATE_NOR) {
-        return "NOR";
-    }
-    if (type == NODE_GATE_LATCH) {
-        return "LATCH";
-    }
-    return NULL;
+    return node_catalog_label(type);
 }
 
 static inline bool ui_node_has_waveform(const LogicNode *node) {
-    if (!node || node->type == (NodeType)-1) {
+    if (!logic_node_is_active(node)) {
         return false;
     }
 
-    return node->type == NODE_INPUT || node->type == NODE_OUTPUT || node->type == NODE_GATE_CLOCK;
+    return node_catalog_has_waveform(node->type);
 }
 
 static inline uint32_t ui_waveform_visible_rows(Rectangle panel) {

@@ -16,6 +16,7 @@
 #include "../src/ui.h"
 #include "../src/ui_geometry.h"
 #include "../src/workspace_layout.h"
+#include "test_logic_regressions.h"
 
 static void test_gate_and(void) {
     LogicValue inputs_low[] = { LOGIC_LOW, LOGIC_LOW };
@@ -221,7 +222,8 @@ static void test_remove_node_removes_attached_nets(void) {
     assert(graph.net_count == 3U);
 
     assert(logic_remove_node(&graph, and_gate));
-    assert(and_gate->type == (NodeType)-1);
+    assert(and_gate->type == NODE_INVALID);
+    assert(!logic_node_is_active(and_gate));
     assert(graph.net_count == 0U);
     printf("test_remove_node_removes_attached_nets passed!\n");
 }
@@ -242,7 +244,7 @@ static LogicNode *find_node_by_name(AppContext *app, const char *name) {
         LogicNode *node;
 
         node = &app->graph.nodes[i];
-        if (node->type == (NodeType)-1 || !node->name) {
+        if (node->type == NODE_INVALID || !node->name) {
             continue;
         }
         if (strcmp(node->name, name) == 0) {
@@ -361,7 +363,7 @@ static void assert_loaded_layout_is_readable(const AppContext *app) {
         uint32_t right_index;
 
         left_node = &app->graph.nodes[left_index];
-        if (left_node->type == (NodeType)-1) {
+        if (left_node->type == NODE_INVALID) {
             continue;
         }
 
@@ -370,7 +372,7 @@ static void assert_loaded_layout_is_readable(const AppContext *app) {
             const LogicNode *right_node;
 
             right_node = &app->graph.nodes[right_index];
-            if (right_node->type == (NodeType)-1) {
+            if (right_node->type == NODE_INVALID) {
                 continue;
             }
 
@@ -401,7 +403,7 @@ static void assert_loaded_layout_is_readable(const AppContext *app) {
         const LogicNode *node;
 
         node = &app->graph.nodes[left_index];
-        if (node->type == (NodeType)-1) {
+        if (node->type == NODE_INVALID) {
             continue;
         }
 
@@ -773,7 +775,7 @@ static void test_circuit_file_load_failure_keeps_existing_graph(void) {
     assert(app_add_named_node(&app, NODE_INPUT, "ExistingIn", (Vector2){ 100.0f, 100.0f }) != NULL);
     assert(app_add_named_node(&app, NODE_OUTPUT, "ExistingOut", (Vector2){ 200.0f, 100.0f }) != NULL);
     assert(logic_connect(&app.graph, &app.graph.nodes[0].outputs[0], &app.graph.nodes[1].inputs[0]));
-    app_update_logic(&app);
+    app_rebuild_derived_state(&app);
 
     loaded = circuit_file_load(&app, temp_path, error_message, sizeof(error_message));
     assert(!loaded);
@@ -1483,7 +1485,7 @@ static void test_frame_graph_in_canvas_centers_loaded_circuit(void) {
         LogicNode *node;
 
         node = &app.graph.nodes[node_index];
-        if (node->type == (NodeType)-1) {
+        if (node->type == NODE_INVALID) {
             continue;
         }
 
@@ -1913,6 +1915,7 @@ static void test_solver_mode_layout_and_input_state(void) {
 int main(void) {
     test_gate_and();
     test_gate_or();
+    run_logic_regression_tests();
     test_simple_circuit();
     test_truth_table();
     test_expression();

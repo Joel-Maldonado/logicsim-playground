@@ -12,8 +12,7 @@ void ui_build_selection_label(const AppContext *app, char *buffer, size_t buffer
     }
 
     if (app->selection.selected_wire_sink &&
-        app->selection.selected_wire_sink->node &&
-        app->selection.selected_wire_sink->node->type != (NodeType)-1) {
+        logic_node_is_active(app->selection.selected_wire_sink->node)) {
         node = app->selection.selected_wire_sink->node;
         snprintf(
             buffer,
@@ -25,7 +24,7 @@ void ui_build_selection_label(const AppContext *app, char *buffer, size_t buffer
         return;
     }
 
-    if (app->selection.selected_node && app->selection.selected_node->type != (NodeType)-1) {
+    if (logic_node_is_active(app->selection.selected_node)) {
         snprintf(
             buffer,
             buffer_size,
@@ -281,7 +280,7 @@ UiContextPanelLayout ui_measure_context_panel(const AppContext *app, Rectangle p
         cursor_y += CONTEXT_KMAP_HEIGHT + CONTEXT_PANEL_GAP;
     }
 
-    layout.why_rect = ui_make_rect(panel.x + CONTEXT_PANEL_PADDING, cursor_y, section_width, bottom - cursor_y);
+    layout.why_rect = ui_make_rect(panel.x + CONTEXT_PANEL_PADDING, cursor_y, section_width, why_height);
     layout.visible_truth_rows = ui_truth_table_visible_rows_in_panel(app, layout.truth_table_rect);
     if (app && app->analysis.truth_table && app->analysis.truth_table->row_count > layout.visible_truth_rows) {
         layout.hidden_truth_rows = app->analysis.truth_table->row_count - layout.visible_truth_rows;
@@ -317,7 +316,7 @@ LogicPin* ui_get_wire_at(AppContext *app, Rectangle canvas, Vector2 mouse_pos) {
         uint8_t sink_index;
 
         net = &graph->nets[i];
-        if (!net->source || !net->source->node || net->source->node->type == (NodeType)-1) {
+        if (!net->source || !logic_node_is_active(net->source->node)) {
             continue;
         }
         for (sink_index = 0; sink_index < net->sink_count; sink_index++) {
@@ -326,7 +325,7 @@ LogicPin* ui_get_wire_at(AppContext *app, Rectangle canvas, Vector2 mouse_pos) {
             float distance;
 
             sink_pin = net->sinks[sink_index];
-            if (!sink_pin || !sink_pin->node || sink_pin->node->type == (NodeType)-1) {
+            if (!sink_pin || !logic_node_is_active(sink_pin->node)) {
                 continue;
             }
 
@@ -356,7 +355,7 @@ LogicPin* ui_get_pin_at(AppContext *app, Rectangle canvas, Vector2 mouse_pos) {
         uint8_t pin_index;
 
         node = &graph->nodes[i];
-        if (node->type == (NodeType)-1) {
+        if (!logic_node_is_active(node)) {
             continue;
         }
 

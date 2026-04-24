@@ -1,4 +1,5 @@
 #include "logic.h"
+#include "node_catalog.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,35 +15,6 @@ static void logic_node_init_pins(LogicNode *node) {
         node->outputs[i].index = i;
         node->outputs[i].value = LOGIC_UNKNOWN;
     }
-}
-
-static void logic_node_set_pin_counts(LogicNode *node, NodeType type) {
-    if (type == NODE_INPUT || type == NODE_GATE_CLOCK) {
-        node->input_count = 0;
-        node->output_count = 1;
-        return;
-    }
-
-    if (type == NODE_OUTPUT) {
-        node->input_count = 1;
-        node->output_count = 0;
-        return;
-    }
-
-    if (type == NODE_GATE_NOT) {
-        node->input_count = 1;
-        node->output_count = 1;
-        return;
-    }
-
-    if (type == NODE_GATE_DFF || type == NODE_GATE_LATCH) {
-        node->input_count = 2;
-        node->output_count = 1;
-        return;
-    }
-
-    node->input_count = 2;
-    node->output_count = 1;
 }
 
 static LogicNet *logic_find_incoming_net(LogicGraph *graph, LogicPin *pin) {
@@ -81,10 +53,6 @@ static void logic_append_text(char *buf, size_t *pos, size_t size, const char *t
     }
 
     *pos += (size_t)written;
-}
-
-static bool logic_node_is_deleted(const LogicNode *node) {
-    return node->type == (NodeType)-1;
 }
 
 static bool logic_net_contains_sink(const LogicNet *net, const LogicPin *sink) {
@@ -130,25 +98,6 @@ static void logic_remove_net_at(LogicGraph *graph, uint32_t index) {
     memset(&graph->nets[graph->net_count], 0, sizeof(LogicNet));
 }
 
-static const char *logic_gate_operator(NodeType type) {
-    if (type == NODE_GATE_AND) {
-        return " AND ";
-    }
-    if (type == NODE_GATE_OR) {
-        return " OR ";
-    }
-    if (type == NODE_GATE_XOR) {
-        return " XOR ";
-    }
-    if (type == NODE_GATE_NAND) {
-        return " NAND ";
-    }
-    if (type == NODE_GATE_NOR) {
-        return " NOR ";
-    }
-    return " ? ";
-}
-
 typedef enum {
     LOGIC_VISIT_UNSEEN = 0,
     LOGIC_VISIT_ACTIVE = 1,
@@ -159,7 +108,7 @@ static void visit(LogicGraph *graph, LogicNode *node, uint8_t *visit_state, Logi
     size_t node_index;
     uint8_t i;
 
-    if (logic_node_is_deleted(node)) {
+    if (!logic_node_is_active(node)) {
         return;
     }
 
@@ -244,7 +193,7 @@ static void build_node_expr(LogicGraph *graph, LogicNode *node, char *buf, size_
         const char *op;
         uint8_t i;
 
-        op = logic_gate_operator(node->type);
+        op = node_catalog_operator_text(node->type);
         for (i = 0; i < node->input_count; i++) {
             if (i > 0) {
                 logic_append_text(buf, pos, size, op);
@@ -274,7 +223,8 @@ LogicNode* logic_add_node(LogicGraph *graph, NodeType type, const char *name) {
     }
 
     logic_node_init_pins(node);
-    logic_node_set_pin_counts(node, type);
+    node->input_count = node_catalog_input_count(type);
+    node->output_count = node_catalog_output_count(type);
     return node;
 }
 
@@ -287,7 +237,6 @@ LogicNet* logic_add_net(LogicGraph *graph) {
 
     net = &graph->nets[graph->net_count++];
     memset(net, 0, sizeof(LogicNet));
-    net->value = LOGIC_UNKNOWN;
     return net;
 }
 
@@ -298,7 +247,7 @@ bool logic_connect(LogicGraph *graph, LogicPin *src, LogicPin *sink) {
     if (!src || !sink || !src->node || !sink->node) {
         return false;
     }
-    if (logic_node_is_deleted(src->node) || logic_node_is_deleted(sink->node)) {
+    if (!logic_node_is_active(src->node) || !logic_node_is_active(sink->node)) {
         return false;
     }
     if (src->node->output_count == 0 || sink->node->input_count == 0) {
@@ -381,7 +330,7 @@ bool logic_disconnect_sink(LogicGraph *graph, LogicPin *sink) {
 bool logic_remove_node(LogicGraph *graph, LogicNode *node) {
     uint32_t i;
 
-    if (!node || logic_node_is_deleted(node)) {
+    if (!node || !logic_node_is_active(node)) {
         return false;
     }
 
@@ -395,7 +344,7 @@ bool logic_remove_node(LogicGraph *graph, LogicNode *node) {
 
     free(node->name);
     node->name = NULL;
-    node->type = (NodeType)-1;
+    node->type = NODE_INVALID;
     node->input_count = 0;
     node->output_count = 0;
     node->state = LOGIC_UNKNOWN;
@@ -412,7 +361,10 @@ bool logic_remove_node(LogicGraph *graph, LogicNode *node) {
 LogicValue logic_eval_gate(NodeType type, LogicValue inputs[], uint8_t count) {
     uint8_t i;
 
-    if (count == 0) {
+    if (!inputs || count == 0U) {
+        return LOGIC_UNKNOWN;
+    }
+    if (count < node_catalog_input_count(type)) {
         return LOGIC_UNKNOWN;
     }
 
@@ -484,6 +436,10 @@ uint32_t logic_topological_sort(LogicGraph *graph, LogicNode **sorted_nodes) {
     return count;
 }
 
+bool logic_node_is_active(const LogicNode *node) {
+    return node && node->type != NODE_INVALID;
+}
+
 void logic_evaluate(LogicGraph *graph) {
     LogicNode *sorted[MAX_NODES];
     uint32_t count;
@@ -496,11 +452,15 @@ void logic_evaluate(LogicGraph *graph) {
         uint8_t j;
 
         node = sorted[i];
-        if (logic_node_is_deleted(node)) {
+        if (!logic_node_is_active(node)) {
             continue;
         }
         if (node->type == NODE_INPUT) {
             continue;
+        }
+
+        for (j = 0U; j < MAX_PINS; j++) {
+            inputs[j] = LOGIC_UNKNOWN;
         }
 
         for (j = 0; j < node->input_count; j++) {
@@ -539,7 +499,7 @@ void logic_tick(LogicGraph *graph) {
         LogicNode *node;
 
         node = &graph->nodes[i];
-        if (logic_node_is_deleted(node)) {
+        if (!logic_node_is_active(node)) {
             continue;
         }
         if (node->type == NODE_GATE_DFF) {

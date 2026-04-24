@@ -1,18 +1,8 @@
 #include "app_canvas.h"
+#include "node_catalog.h"
 #include <string.h>
 
 #define APP_PIN_ALIGN_TOLERANCE 12.0f
-
-static uint8_t app_node_max_pin_count(NodeType type) {
-    if (type == NODE_INPUT || type == NODE_OUTPUT || type == NODE_GATE_NOT || type == NODE_GATE_CLOCK) {
-        return 1U;
-    }
-    if (type == NODE_GATE_DFF || type == NODE_GATE_LATCH) {
-        return 2U;
-    }
-
-    return 2U;
-}
 
 static float app_absf(float value) {
     return value < 0.0f ? -value : value;
@@ -55,14 +45,9 @@ void app_node_dimensions(NodeType type, int *width, int *height) {
         return;
     }
 
-    pin_rows = app_node_max_pin_count(type);
+    pin_rows = node_catalog_pin_rows(type);
     *height = (int)((float)APP_GRID_SIZE * 2.0f * (float)pin_rows);
-    if (type == NODE_INPUT || type == NODE_OUTPUT || type == NODE_GATE_NOT || type == NODE_GATE_CLOCK) {
-        *width = 60;
-        return;
-    }
-
-    *width = 80;
+    *width = node_catalog_width(type);
 }
 
 float app_node_pin_offset_y(const LogicNode *node, bool is_output_pin, uint8_t pin_index) {
@@ -101,6 +86,7 @@ Vector2 app_default_node_position(const AppContext *app, NodeType type) {
         case NODE_GATE_LATCH:
         case NODE_GATE_CLOCK:
             return (Vector2){ 320.0f, 200.0f + ((float)count * 100.0f) };
+        case NODE_INVALID:
         default:
             return (Vector2){ 320.0f, 200.0f };
     }
@@ -128,7 +114,7 @@ Vector2 app_snap_live_node_position(const AppContext *app, const LogicNode *node
     uint32_t net_index;
 
     snapped = app_snap_node_position(position, node ? node->type : NODE_INPUT);
-    if (!app || !node || node->type == (NodeType)-1) {
+    if (!app || !logic_node_is_active(node)) {
         return snapped;
     }
 
@@ -155,7 +141,7 @@ Vector2 app_snap_live_node_position(const AppContext *app, const LogicNode *node
                 float candidate_y;
 
                 sink_pin = net->sinks[sink_index];
-                if (!sink_pin || !sink_pin->node || sink_pin->node->type == (NodeType)-1) {
+                if (!sink_pin || !logic_node_is_active(sink_pin->node)) {
                     continue;
                 }
 
@@ -167,25 +153,27 @@ Vector2 app_snap_live_node_position(const AppContext *app, const LogicNode *node
             }
         }
 
-        if (!net->source || !net->source->node || net->source->node->type == (NodeType)-1) {
+        if (!net->source || !net->source->node || net->source->node->type == NODE_INVALID) {
             continue;
         }
 
         for (sink_index = 0U; sink_index < net->sink_count; sink_index++) {
+            const LogicNode *source_node;
             LogicPin *sink_pin;
             float candidate_y;
 
+            source_node = net->source->node;
             sink_pin = net->sinks[sink_index];
             if (!sink_pin || sink_pin->node != node) {
                 continue;
             }
 
             candidate_y =
-                net->source->node->pos.y +
-                app_node_pin_offset_y(net->source->node, true, net->source->index) -
+                source_node->pos.y +
+                app_node_pin_offset_y(source_node, true, net->source->index) -
                 app_node_pin_offset_y(node, false, sink_pin->index);
             app_consider_vertical_alignment(candidate_y, position.y, &best_y, &best_distance);
-            input_pin_sum_y += net->source->node->pos.y + app_node_pin_offset_y(net->source->node, true, net->source->index);
+            input_pin_sum_y += source_node->pos.y + app_node_pin_offset_y(source_node, true, net->source->index);
             input_offset_sum += app_node_pin_offset_y(node, false, sink_pin->index);
             input_alignment_count++;
         }
@@ -305,7 +293,7 @@ bool app_frame_graph_in_canvas(AppContext *app, Rectangle canvas_rect) {
         LogicNode *node;
 
         node = &app->graph.nodes[node_index];
-        if (node->type == (NodeType)-1) {
+        if (!logic_node_is_active(node)) {
             continue;
         }
         if (!found_node) {

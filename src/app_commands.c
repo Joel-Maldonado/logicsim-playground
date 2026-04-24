@@ -2,6 +2,7 @@
 #include "app_analysis.h"
 #include "app_canvas.h"
 #include "app_internal.h"
+#include "node_catalog.h"
 #include "raylib.h"
 #include <string.h>
 
@@ -97,7 +98,7 @@ bool app_delete_selected_wire(AppContext *app) {
         return false;
     }
 
-    app_update_logic(app);
+    app_rebuild_derived_state(app);
     return true;
 }
 
@@ -161,7 +162,7 @@ bool app_delete_selected_node(AppContext *app) {
     app->selection.selected_node = NULL;
     app->selection.selected_wire_sink = NULL;
     app->canvas.drag_node = NULL;
-    app_update_logic(app);
+    app_rebuild_derived_state(app);
     return true;
 }
 
@@ -183,7 +184,7 @@ bool app_select_next_node(AppContext *app, int direction) {
             uint32_t node_index;
 
             node_index = (start_index + index) % app->graph.node_count;
-            if (app->graph.nodes[node_index].type == (NodeType)-1) {
+            if (!logic_node_is_active(&app->graph.nodes[node_index])) {
                 continue;
             }
             app->selection.selected_node = &app->graph.nodes[node_index];
@@ -202,7 +203,7 @@ bool app_select_next_node(AppContext *app, int direction) {
             uint32_t node_index;
 
             node_index = (start_index + app->graph.node_count - index) % app->graph.node_count;
-            if (app->graph.nodes[node_index].type == (NodeType)-1) {
+            if (!logic_node_is_active(&app->graph.nodes[node_index])) {
                 continue;
             }
             app->selection.selected_node = &app->graph.nodes[node_index];
@@ -251,13 +252,13 @@ LogicNode *app_create_node_for_tool(AppContext *app, AppTool tool) {
     app->selection.selected_wire_sink = NULL;
     app->active_tool = APP_TOOL_SELECT;
     app_cancel_wire_drag(app);
-    app_update_logic(app);
+    app_rebuild_derived_state(app);
     app_set_panel_focus(app, APP_PANEL_CANVAS);
     return node;
 }
 
 bool app_select_node_by_index(AppContext *app, uint32_t node_index) {
-    if (!app || node_index >= app->graph.node_count || app->graph.nodes[node_index].type == (NodeType)-1) {
+    if (!app || node_index >= app->graph.node_count || !logic_node_is_active(&app->graph.nodes[node_index])) {
         return false;
     }
 
@@ -277,7 +278,7 @@ bool app_activate_pin_by_index(AppContext *app, uint32_t node_index, bool is_out
     }
 
     node = &app->graph.nodes[node_index];
-    if (node->type == (NodeType)-1) {
+    if (!logic_node_is_active(node)) {
         return false;
     }
 
@@ -337,7 +338,7 @@ bool app_connect_pins(AppContext *app, LogicPin *first_pin, LogicPin *second_pin
         return false;
     }
 
-    app_update_logic(app);
+    app_rebuild_derived_state(app);
     return true;
 }
 
@@ -506,54 +507,15 @@ void app_handle_command(AppContext *app, EditorCommand command) {
 }
 
 AppTool app_tool_from_node_type(NodeType type) {
-    switch (type) {
-        case NODE_INPUT:
-            return APP_TOOL_INPUT;
-        case NODE_OUTPUT:
-            return APP_TOOL_OUTPUT;
-        case NODE_GATE_AND:
-            return APP_TOOL_AND;
-        case NODE_GATE_OR:
-            return APP_TOOL_OR;
-        case NODE_GATE_NOT:
-            return APP_TOOL_NOT;
-        case NODE_GATE_XOR:
-            return APP_TOOL_XOR;
-        case NODE_GATE_NAND:
-        case NODE_GATE_NOR:
-        case NODE_GATE_DFF:
-        case NODE_GATE_LATCH:
-        case NODE_GATE_CLOCK:
-            return (type == NODE_GATE_CLOCK) ? APP_TOOL_CLOCK : APP_TOOL_SELECT;
-        default:
-            return APP_TOOL_SELECT;
-    }
+    return node_catalog_tool(type);
 }
 
 NodeType app_node_type_for_tool(AppTool tool) {
-    switch (tool) {
-        case APP_TOOL_INPUT:
-            return NODE_INPUT;
-        case APP_TOOL_OUTPUT:
-            return NODE_OUTPUT;
-        case APP_TOOL_AND:
-            return NODE_GATE_AND;
-        case APP_TOOL_OR:
-            return NODE_GATE_OR;
-        case APP_TOOL_NOT:
-            return NODE_GATE_NOT;
-        case APP_TOOL_XOR:
-            return NODE_GATE_XOR;
-        case APP_TOOL_CLOCK:
-            return NODE_GATE_CLOCK;
-        case APP_TOOL_SELECT:
-        default:
-            return NODE_INPUT;
-    }
+    return node_catalog_type_for_tool(tool);
 }
 
 bool app_tool_places_node(AppTool tool) {
-    return tool != APP_TOOL_SELECT;
+    return node_catalog_tool_places_node(tool);
 }
 
 const char *app_mode_label(AppMode mode) {

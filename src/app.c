@@ -3,6 +3,7 @@
 #include "app_canvas.h"
 #include "app_commands.h"
 #include "app_internal.h"
+#include "node_catalog.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,35 +49,6 @@ static void app_build_output_name(uint32_t index, char *buffer, size_t buffer_si
     snprintf(buffer, buffer_size, "Z%u", index);
 }
 
-static const char *app_gate_name_prefix(NodeType type) {
-    switch (type) {
-        case NODE_INPUT:
-            return "IN";
-        case NODE_OUTPUT:
-            return "OUT";
-        case NODE_GATE_AND:
-            return "AND";
-        case NODE_GATE_OR:
-            return "OR";
-        case NODE_GATE_NOT:
-            return "NOT";
-        case NODE_GATE_XOR:
-            return "XOR";
-        case NODE_GATE_NAND:
-            return "NAND";
-        case NODE_GATE_NOR:
-            return "NOR";
-        case NODE_GATE_DFF:
-            return "DFF";
-        case NODE_GATE_LATCH:
-            return "LATCH";
-        case NODE_GATE_CLOCK:
-            return "CLK";
-        default:
-            return "NODE";
-    }
-}
-
 static void app_default_node_name(const AppContext *app, NodeType type, char *buffer, size_t buffer_size) {
     uint32_t count;
 
@@ -90,7 +62,7 @@ static void app_default_node_name(const AppContext *app, NodeType type, char *bu
         return;
     }
 
-    snprintf(buffer, buffer_size, "%s%u", app_gate_name_prefix(type), count + 1U);
+    snprintf(buffer, buffer_size, "%s%u", node_catalog_name_prefix(type), count + 1U);
 }
 
 static LogicValue app_node_waveform_value(const LogicNode *node) {
@@ -126,7 +98,7 @@ void app_record_waveforms(AppContext *app) {
         LogicNode *node;
 
         node = &app->graph.nodes[index];
-        if (node->type == (NodeType)-1) {
+        if (!logic_node_is_active(node)) {
             continue;
         }
         app->simulation.waveforms[index][app->simulation.waveform_index] = app_node_waveform_value(node);
@@ -148,7 +120,7 @@ void app_init(AppContext *app) {
     app_solver_set_input(app, APP_SOLVER_SEED_EXPRESSION);
 }
 
-void app_update_logic(AppContext *app) {
+void app_rebuild_derived_state(AppContext *app) {
     LogicNode *output_node;
     LogicValue saved_inputs[MAX_PINS];
     LogicNode *saved_input_nodes[MAX_PINS];

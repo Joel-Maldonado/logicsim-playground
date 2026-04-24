@@ -763,7 +763,6 @@ static bool select_cover(
 ) {
     bool prime_selected[BOOL_SOLVER_MAX_IMPLICANTS];
     bool covered[256];
-    bool progress;
 
     memset(prime_selected, 0, sizeof(prime_selected));
     memset(covered, 0, sizeof(covered));
@@ -797,8 +796,7 @@ static bool select_cover(
         }
     }
 
-    progress = true;
-    while (progress) {
+    for (;;) {
         uint16_t best_index;
         uint16_t best_cover_count;
         bool has_uncovered;
@@ -815,7 +813,6 @@ static bool select_cover(
             return true;
         }
 
-        progress = false;
         best_index = 0U;
         best_cover_count = 0U;
         for (uint16_t prime_index = 0U; prime_index < prime_count; prime_index++) {
@@ -851,7 +848,6 @@ static bool select_cover(
                 covered[minterm_index] = true;
             }
         }
-        progress = true;
     }
 
     return false;

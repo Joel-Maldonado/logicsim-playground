@@ -1,5 +1,5 @@
 #include "circuit_layout.h"
-#include "app_canvas.h"
+#include "node_catalog.h"
 #include <float.h>
 #include <math.h>
 #include <string.h>
@@ -216,7 +216,8 @@ static void layout_component_build(
         global_index = graph_component->node_indices[local_index];
         component->node_indices[local_index] = global_index;
         component->local_index_by_global[global_index] = (int32_t)local_index;
-        app_node_dimensions(nodes[global_index].type, &component->widths[local_index], &component->heights[local_index]);
+        component->widths[local_index] = node_catalog_width(nodes[global_index].type);
+        component->heights[local_index] = (int)(LAYOUT_GRID * 2.0f * node_catalog_pin_rows(nodes[global_index].type));
     }
 
     for (edge_index = 0U; edge_index < edge_count; edge_index++) {
@@ -677,6 +678,7 @@ static void layout_component_sweep_order(LayoutComponent *component, bool use_pr
     uint32_t end_rank;
     int step;
 
+    memset(layer_position, 0, sizeof(layer_position));
     layout_component_update_layer_positions(component, layer_position);
     if (use_predecessors) {
         start_rank = 1U;
@@ -1055,6 +1057,7 @@ static float layout_component_finalize_positions(
     float shift_y;
     uint32_t local_index;
 
+    memset(layer_position, 0, sizeof(layer_position));
     layout_component_update_layer_positions(component, layer_position);
     memset(base_x, 0, sizeof(base_x));
     memset(min_offset, 0, sizeof(min_offset));

@@ -2,6 +2,7 @@
 #include "app_analysis.h"
 #include "app_canvas.h"
 #include "circuit_layout.h"
+#include "node_catalog.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,43 +91,6 @@ static void strip_comment(char *text) {
     if (comment) {
         *comment = '\0';
     }
-}
-
-static bool parse_node_type(const char *token, NodeType *type) {
-    if (strcmp(token, "input") == 0) {
-        *type = NODE_INPUT;
-        return true;
-    }
-    if (strcmp(token, "output") == 0) {
-        *type = NODE_OUTPUT;
-        return true;
-    }
-    if (strcmp(token, "and") == 0) {
-        *type = NODE_GATE_AND;
-        return true;
-    }
-    if (strcmp(token, "or") == 0) {
-        *type = NODE_GATE_OR;
-        return true;
-    }
-    if (strcmp(token, "not") == 0) {
-        *type = NODE_GATE_NOT;
-        return true;
-    }
-    if (strcmp(token, "xor") == 0) {
-        *type = NODE_GATE_XOR;
-        return true;
-    }
-    if (strcmp(token, "dff") == 0) {
-        *type = NODE_GATE_DFF;
-        return true;
-    }
-    if (strcmp(token, "clock") == 0) {
-        *type = NODE_GATE_CLOCK;
-        return true;
-    }
-
-    return false;
 }
 
 static CircuitDocumentNode *find_document_node(CircuitDocument *document, const char *name) {
@@ -239,7 +203,7 @@ static bool parse_node_line(
         set_error(error_message, error_message_size, "node declaration needs a type and name", line_number);
         return false;
     }
-    if (!parse_node_type(kind_token, &type)) {
+    if (!node_catalog_type_from_token(kind_token, &type)) {
         set_error(error_message, error_message_size, "unknown node type", line_number);
         return false;
     }
@@ -358,37 +322,10 @@ static bool parse_circuit_text(const char *text, CircuitDocument *document, char
     return true;
 }
 
-static void document_node_pin_counts(const CircuitDocumentNode *node, uint8_t *input_count, uint8_t *output_count) {
-    if (node->type == NODE_INPUT || node->type == NODE_GATE_CLOCK) {
-        *input_count = 0U;
-        *output_count = 1U;
-        return;
-    }
-    if (node->type == NODE_OUTPUT) {
-        *input_count = 1U;
-        *output_count = 0U;
-        return;
-    }
-    if (node->type == NODE_GATE_NOT) {
-        *input_count = 1U;
-        *output_count = 1U;
-        return;
-    }
-    if (node->type == NODE_GATE_DFF) {
-        *input_count = 2U;
-        *output_count = 1U;
-        return;
-    }
-
-    *input_count = 2U;
-    *output_count = 1U;
-}
-
 static bool resolve_source_pin(const CircuitDocumentNode *node, const CircuitEndpoint *endpoint, uint8_t *pin_index) {
-    uint8_t input_count;
     uint8_t output_count;
 
-    document_node_pin_counts(node, &input_count, &output_count);
+    output_count = node_catalog_output_count(node->type);
     if (endpoint->explicit_pin) {
         if (!endpoint->is_output_pin || endpoint->pin_index >= output_count) {
             return false;
@@ -406,9 +343,8 @@ static bool resolve_source_pin(const CircuitDocumentNode *node, const CircuitEnd
 
 static bool resolve_sink_pin(const CircuitDocumentNode *node, const CircuitEndpoint *endpoint, uint8_t *pin_index) {
     uint8_t input_count;
-    uint8_t output_count;
 
-    document_node_pin_counts(node, &input_count, &output_count);
+    input_count = node_catalog_input_count(node->type);
     if (endpoint->explicit_pin) {
         if (endpoint->is_output_pin || endpoint->pin_index >= input_count) {
             return false;
@@ -439,7 +375,8 @@ static bool build_layout_spec(
         uint8_t input_count;
         uint8_t output_count;
 
-        document_node_pin_counts(&document->nodes[node_index], &input_count, &output_count);
+        input_count = node_catalog_input_count(document->nodes[node_index].type);
+        output_count = node_catalog_output_count(document->nodes[node_index].type);
         layout_nodes[node_index].type = document->nodes[node_index].type;
         layout_nodes[node_index].name = document->nodes[node_index].name;
         layout_nodes[node_index].input_count = input_count;
@@ -548,7 +485,7 @@ static bool apply_document(
         }
     }
 
-    for (wire_index = 0U; wire_index < document->wire_count; wire_index++) {
+    for (wire_index = 0U; wire_index < layout_edge_count; wire_index++) {
         LogicNode *source_node;
         LogicNode *sink_node;
         LogicPin *source_pin;
@@ -566,7 +503,7 @@ static bool apply_document(
         }
     }
 
-    app_update_logic(app);
+    app_rebuild_derived_state(app);
     return true;
 }
 

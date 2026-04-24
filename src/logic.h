@@ -13,6 +13,7 @@ typedef enum {
 } LogicValue;
 
 typedef enum {
+    NODE_INVALID = -1,
     NODE_INPUT,
     NODE_OUTPUT,
     NODE_GATE_AND,
@@ -45,9 +46,8 @@ typedef struct {
 struct LogicNet {
     LogicPin *source;
     LogicPin *sinks[MAX_PINS];
-    LogicValue value;
     uint8_t sink_count;
-    uint8_t _padding[3];
+    uint8_t _padding[7];
 };
 
 struct LogicNode {
@@ -91,6 +91,7 @@ LogicNet* logic_add_net(LogicGraph *graph);
 bool logic_connect(LogicGraph *graph, LogicPin *src, LogicPin *sink);
 bool logic_disconnect_sink(LogicGraph *graph, LogicPin *sink);
 bool logic_remove_node(LogicGraph *graph, LogicNode *node);
+bool logic_node_is_active(const LogicNode *node);
 void logic_evaluate(LogicGraph *graph);
 void logic_tick(LogicGraph *graph);
 LogicValue logic_eval_gate(NodeType type, LogicValue inputs[], uint8_t count);

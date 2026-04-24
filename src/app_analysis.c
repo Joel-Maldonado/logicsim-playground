@@ -56,7 +56,7 @@ void app_compute_view_context(AppContext *app) {
     view->live_row_index = 0U;
     view->live_output = LOGIC_UNKNOWN;
 
-    if (app->selection.selected_node && app->selection.selected_node->type != (NodeType)-1) {
+    if (logic_node_is_active(app->selection.selected_node)) {
         LogicNode *node;
 
         node = app->selection.selected_node;
@@ -170,7 +170,7 @@ char *app_get_node_explanation(AppContext *app, LogicNode *node) {
     const char *output_text;
 
     (void)app;
-    if (!node || node->type == (NodeType)-1) {
+    if (!logic_node_is_active(node)) {
         return NULL;
     }
 
